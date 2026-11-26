@@ -531,7 +531,7 @@ main() {
             7) history_menu ;;
             8) : ;;
             9) setup_menu ;;
-            0) break ;;
+            0|"") break ;;
             *) echo 'Choix invalide.'; pause_error ;;
         esac
     done
