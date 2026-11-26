@@ -466,10 +466,10 @@ show_menu() {
 
     if [[ -z "$last" ]]; then
         echo 'Dernier REPAS : Aucun'
-        echo 'Temps depuis REPAS : --'
+        echo 'Temps depuis dernier REPAS : --'
     else
         printf 'Dernier REPAS : %s\n' "$(format_time "$last")"
-        printf 'Temps depuis REPAS : %s\n' \
+        printf 'Temps depuis dernier REPAS : %s\n' \
             "$(format_duration "$((now - last))")"
     fi
 
@@ -484,7 +484,7 @@ show_menu() {
             printf 'Dernier BOOST : %s\n' \
                 "$(format_time "$boost")"
 
-            printf 'Temps depuis BOOST : %s\n' \
+            printf 'Temps depuis dernier BOOST : %s\n' \
                 "$(format_duration "$elapsed")"
 
             end=$((boost + effect * 3600))
