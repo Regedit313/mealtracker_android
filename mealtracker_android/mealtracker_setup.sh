@@ -1,6 +1,6 @@
 
 #!/data/data/com.termux/files/usr/bin/bash
-# Setup non destructif pour le nouveau format Boost (version 2).
+# Setup non destructif pour le nouveau format BOOST (version 2).
 set -u
 
 DATA_DIR="$HOME/storage/shared/mealtracker_data"
@@ -13,7 +13,7 @@ finish() {
     exit "$status"
 }
 
-echo 'MealTracker Boost - Setup / Update'
+echo 'MealTracker BOOST - Setup / Update'
 
 if [[ ! -d "$HOME/storage/shared" ]]; then
     echo 'Stockage indisponible. Lance termux-setup-storage.'
@@ -49,8 +49,8 @@ if [[ ! -e "$JSON" ]]; then
 
     rm -f "$tmp"
 
-    echo 'Nouvel historique Boost initialise.'
-    echo 'Repas : 12 h | Effet Boost : 6 h | Affichage Boost : 12 h'
+    echo 'Nouvel historique BOOST initialise.'
+    echo 'REPAS : 12 h | Effet BOOST : 6 h | Affichage BOOST : 12 h'
 
 else
 
@@ -68,7 +68,7 @@ else
         finish 1
     fi
 
-    echo 'Historique et reglages Boost existants conserves.'
+    echo 'Historique et reglages BOOST existants conserves.'
 fi
 
 echo "Donnees : $JSON"
