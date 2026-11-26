@@ -451,7 +451,7 @@ history_menu() {
                 fi
                 history_view "$start" "$end" 'periode choisie'
                 ;;
-            0) return ;;
+            0|"") return ;;
             *) echo 'Choix invalide.'; pause_error ;;
         esac
     done
@@ -484,7 +484,7 @@ interval_menu() {
                 fi
                 hours=$((10#$hours))
                 ;;
-            0) return ;;
+            0|"") return ;;
             *) echo 'Choix invalide.'; pause_error; continue ;;
         esac
         if commit_json --argjson hours "$hours" '.interval_hours = $hours'; then
@@ -507,7 +507,7 @@ setup_menu() {
         case "$choice" in
             1) interval_menu ;;
             2) bash "$APP_DIR/mealtracker_setup.sh" ;;
-            0) return ;;
+            0|"") return ;;
             *) echo 'Choix invalide.'; pause_error ;;
         esac
     done
