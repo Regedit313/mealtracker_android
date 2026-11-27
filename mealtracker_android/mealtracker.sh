@@ -490,12 +490,12 @@ show_menu() {
                 "$(format_duration "$elapsed")"
             end=$((boost + effect * 3600))
             if (( now < end )); then
-                printf 'Fin effet BOOST estimee : %s\n' \
+                printf 'Fin effet BOOST : %s\n' \
                     "$(format_time_compact "$end")"
                 printf '(dans %s)\n' \
                     "$(format_duration "$((end - now))")"
             else
-                printf 'Fin effet BOOST estimee : %s\n' \
+                printf 'Fin effet BOOST : %s\n' \
                     "$(format_time_compact "$end")"
                 echo '(effet estime termine)'
             fi
