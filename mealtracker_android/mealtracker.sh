@@ -107,10 +107,6 @@ valid_json() {
 
 init_data() {
     local tmp
-    if [[ ! -d "$HOME/storage/shared" ]]; then
-        echo 'Stockage indisponible : lance termux-setup-storage.'
-        return 1
-    fi
     mkdir -p "$DATA_DIR" || return 1
     if [[ ! -e "$JSON" ]]; then
         tmp=$(mktemp "$DATA_DIR/.initial.XXXXXXXX") || return 1
@@ -788,20 +784,47 @@ setup_menu() {
     done
 }
 
+show_unconfigured_menu() {
+    clear 2>/dev/null || true
+    echo 'mealtracker_android'
+    echo '-------------------'
+    echo 'Configuration indisponible.'
+    echo 'Utilise 9) Setup / Update.'
+    echo
+    echo '1) Enregistrer un REPAS'
+    echo '3) Enregistrer un BOOST'
+    echo '5) Ajout manuel'
+    echo '7) Historique'
+    echo '8) Actualiser'
+    echo '9) Setup / Update'
+    echo '0) Quitter'
+    echo
+}
+
 main() {
-    local choice
-    if ! command -v jq >/dev/null 2>&1; then
-        echo 'jq manquant. Lance mealtracker_setup.sh.'
-        pause_error
-        return 1
-    fi
-    init_data || {
-        pause_error
-        return 1
-    }
+    local choice ready
     while true; do
-        show_menu
+        ready=true
+        if ! command -v jq >/dev/null 2>&1; then
+            ready=false
+        elif ! init_data; then
+            ready=false
+        fi
+        if [[ "$ready" == true ]]; then
+            show_menu
+        else
+            show_unconfigured_menu
+        fi
         read -r -p 'Choix : ' choice || break
+        if [[ "$ready" == false ]]; then
+            case "$choice" in
+                9) bash "$APP_DIR/mealtracker_setup.sh" ;;
+                8) : ;;
+                0|"") break ;;
+                *) echo 'Configuration requise. Lance 9) Setup / Update.'; pause_error ;;
+            esac
+            continue
+        fi
         case "$choice" in
             1)
                 meal_with_choice "$(date +%s)"
