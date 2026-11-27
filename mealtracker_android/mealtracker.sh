@@ -1,6 +1,6 @@
 
 #!/data/data/com.termux/files/usr/bin/bash
-# MealTracker Boost - application Termux, donnees persistantes separees.
+# MealTracker BOOST + NUTRI - application Termux, donnees persistantes separees.
 set -u
 set -o pipefail
 
@@ -14,6 +14,10 @@ pause_error() {
 }
 
 format_time() { date -d "@$1" '+%d/%m/%Y - %H:%M'; }
+
+format_time_compact() {
+    date -d "@$1" '+%d/%m/%Y à %Hh%M'
+}
 
 format_duration() {
     local s=$1 d h m
@@ -80,7 +84,7 @@ parse_hour() {
 
 valid_json() {
     jq -e '
-        .version == 2 and
+        .version == 3 and
         (.interval_hours |
             type == "number" and . == floor and . >= 1 and . <= 720) and
         (.boost_effect_hours |
@@ -89,18 +93,26 @@ valid_json() {
             type == "number" and . == floor and . >= 1 and . <= 720) and
         (.meals | type == "array") and
         (.boosts | type == "array") and
+        (.nutris | type == "array") and
         (all(.meals[];
             (.timestamp | type == "number" and . == floor) and
-            (.with_boost | type == "boolean")
+            (.with_boost | type == "boolean") and
+            (.with_nutri | type == "boolean")
         )) and
         (all(.boosts[];
             (.timestamp | type == "number" and . == floor) and
             (.with_meal | type == "boolean")
         )) and
+        (all(.nutris[];
+            (.timestamp | type == "number" and . == floor) and
+            (.with_meal == true)
+        )) and
         ([.meals[].timestamp] ==
             ([.meals[].timestamp] | sort | unique)) and
         ([.boosts[].timestamp] ==
-            ([.boosts[].timestamp] | sort | unique))
+            ([.boosts[].timestamp] | sort | unique)) and
+        ([.nutris[].timestamp] ==
+            ([.nutris[].timestamp] | sort | unique))
     ' "$1" >/dev/null 2>&1
 }
 
@@ -117,7 +129,7 @@ init_data() {
     if [[ ! -e "$JSON" ]]; then
         tmp=$(mktemp "$DATA_DIR/.initial.XXXXXXXX") || return 1
 
-        if ! printf '{"version":2,"interval_hours":12,"boost_effect_hours":6,"boost_display_hours":12,"meals":[],"boosts":[]}\n' > "$tmp"; then
+        if ! printf '{"version":3,"interval_hours":12,"boost_effect_hours":6,"boost_display_hours":12,"meals":[],"boosts":[],"nutris":[]}\n' > "$tmp"; then
             rm -f "$tmp"
             return 1
         fi
@@ -190,7 +202,16 @@ latest_boost() {
     ' "$JSON"
 }
 
-# Boost le plus recent avant l'heure proposee.
+latest_nutri() {
+    jq -r '
+        if (.nutris | length) == 0
+        then empty
+        else .nutris[-1].timestamp
+        end
+    ' "$JSON"
+}
+
+# BOOST le plus recent avant l'heure proposee.
 previous_boost() {
     jq -r --argjson t "$1" '
         [.boosts[] | select(.timestamp < $t) | .timestamp] |
@@ -239,7 +260,7 @@ preview_boost() {
     [[ "$choice" == 1 ]]
 }
 
-# Ajout manuel de repas = rattrapage, pas insertion ancienne.
+# Ajout manuel de REPAS = rattrapage, pas insertion ancienne.
 check_meal_time() {
     local ts="$1" last now
 
@@ -257,43 +278,96 @@ check_meal_time() {
     fi
 }
 
-# Repas + Boost : un seul horodatage commun.
+# Question NUTRI sans restriction automatique de frequence.
+# WITH_NUTRI est defini seulement apres un choix valide.
+choose_nutri() {
+    local choice
+
+    clear 2>/dev/null || true
+
+    echo 'NUTRI'
+    echo
+    echo '1) Avec NUTRI'
+    echo '2) Sans NUTRI'
+    echo '0) Annuler'
+    echo
+
+    read -r -p 'Choix : ' choice || return 1
+
+    case "$choice" in
+        1)
+            WITH_NUTRI=true
+            ;;
+        2)
+            WITH_NUTRI=false
+            ;;
+        0|"")
+            return 1
+            ;;
+        *)
+            echo 'Choix invalide. Rien enregistre.'
+            pause_error
+            return 1
+            ;;
+    esac
+}
+
+# REPAS, BOOST eventuel et NUTRI eventuel :
+# un seul horodatage et une seule ecriture JSON.
 write_meal() {
-    local ts="$1" with_boost="$2"
+    local ts="$1" with_boost="$2" with_nutri="$3"
 
     if [[ "$with_boost" == true ]]; then
-
         if jq -e --argjson t "$ts" '
             any(.boosts[]; .timestamp == $t)
         ' "$JSON" >/dev/null; then
             echo 'Un BOOST existe deja a cette heure. REPAS non enregistre.'
             return 1
         fi
+    fi
 
-        commit_json --argjson t "$ts" '
-            .meals += [
-                {"timestamp":$t,"with_boost":true}
-            ] |
+    if [[ "$with_nutri" == true ]]; then
+        if jq -e --argjson t "$ts" '
+            any(.nutris[]; .timestamp == $t)
+        ' "$JSON" >/dev/null; then
+            echo 'Un NUTRI existe deja a cette heure. REPAS non enregistre.'
+            return 1
+        fi
+    fi
+
+    commit_json \
+        --argjson t "$ts" \
+        --argjson b "$with_boost" \
+        --argjson n "$with_nutri" '
+        .meals += [
+            {
+                "timestamp": $t,
+                "with_boost": $b,
+                "with_nutri": $n
+            }
+        ] |
+        (if $b then
             .boosts += [
                 {"timestamp":$t,"with_meal":true}
-            ] |
-            .boosts |= sort_by(.timestamp)
-        '
-
-    else
-
-        commit_json --argjson t "$ts" '
-            .meals += [
-                {"timestamp":$t,"with_boost":false}
             ]
-        '
-
-    fi
+        else
+            .
+        end) |
+        (if $n then
+            .nutris += [
+                {"timestamp":$t,"with_meal":true}
+            ]
+        else
+            .
+        end) |
+        .boosts |= sort_by(.timestamp) |
+        .nutris |= sort_by(.timestamp)
+    '
 }
 
-# Question Boost AVANT l'enregistrement du repas.
+# Question BOOST puis NUTRI AVANT tout enregistrement.
 meal_with_choice() {
-    local ts="$1" choice
+    local ts="$1" choice with_boost
 
     check_meal_time "$ts" || {
         pause_error
@@ -313,12 +387,13 @@ meal_with_choice() {
 
     case "$choice" in
         1)
-            if preview_boost "$ts"; then
-                write_meal "$ts" true || pause_error
+            if ! preview_boost "$ts"; then
+                return
             fi
+            with_boost=true
             ;;
         2)
-            write_meal "$ts" false || pause_error
+            with_boost=false
             ;;
         0|"")
             return
@@ -326,8 +401,14 @@ meal_with_choice() {
         *)
             echo 'Choix invalide. Rien enregistre.'
             pause_error
+            return
             ;;
     esac
+
+    # Annuler ici annule aussi le REPAS et le BOOST prevus.
+    choose_nutri || return
+
+    write_meal "$ts" "$with_boost" "$WITH_NUTRI" || pause_error
 }
 
 # Lecture de date facultative + heure obligatoire.
@@ -375,7 +456,7 @@ manual_meal() {
     meal_with_choice "$ts"
 }
 
-# Un Boost manuel peut etre insere entre des evenements existants.
+# Un BOOST manuel peut etre insere entre des evenements existants.
 boost_at() {
     local ts="$1"
 
@@ -449,13 +530,14 @@ manual_menu() {
 }
 
 show_menu() {
-    local now last boost interval effect display next diff end elapsed
+    local now last boost nutri interval effect display next diff end elapsed
 
     clear 2>/dev/null || true
 
     now=$(date +%s)
     last=$(latest_meal)
     boost=$(latest_boost)
+    nutri=$(latest_nutri)
 
     interval=$(jq -r '.interval_hours' "$JSON")
     effect=$(jq -r '.boost_effect_hours' "$JSON")
@@ -464,63 +546,64 @@ show_menu() {
     echo 'mealtracker_android'
     echo '-------------------'
 
+    # Bloc REPAS : dernier, prochain, intervalle.
     if [[ -z "$last" ]]; then
         echo 'Dernier REPAS : Aucun'
-        echo 'Temps depuis dernier REPAS : --'
+        echo 'Prochain REPAS : --'
     else
-        printf 'Dernier REPAS : %s\n' "$(format_time "$last")"
-        printf 'Temps depuis dernier REPAS : %s\n' \
+        printf 'Dernier REPAS : %s (il y a %s)\n' \
+            "$(format_time_compact "$last")" \
             "$(format_duration "$((now - last))")"
+
+        next=$((last + interval * 3600))
+        diff=$((next - now))
+
+        if (( diff >= 0 )); then
+            printf 'Prochain REPAS : %s (dans %s)\n' \
+                "$(format_time_compact "$next")" \
+                "$(format_duration "$diff")"
+        else
+            printf 'Prochain REPAS : %s (depasse de %s)\n' \
+                "$(format_time_compact "$next")" \
+                "$(format_duration "$((-diff))")"
+        fi
     fi
 
-    # Tout le bloc Boost disparait apres sa duree d'affichage.
-    if [[ -n "$boost" ]]; then
+    printf 'Intervalle REPAS : %s h\n' "$interval"
 
+    # Le bloc BOOST disparait apres sa duree d'affichage.
+    if [[ -n "$boost" ]]; then
         elapsed=$((now - boost))
 
         if (( elapsed >= 0 && elapsed < display * 3600 )); then
             echo
 
-            printf 'Dernier BOOST : %s\n' \
-                "$(format_time "$boost")"
-
-            printf 'Temps depuis dernier BOOST : %s\n' \
+            printf 'Dernier BOOST : %s (il y a %s)\n' \
+                "$(format_time_compact "$boost")" \
                 "$(format_duration "$elapsed")"
 
             end=$((boost + effect * 3600))
 
-            printf 'Fin effet BOOST estimee : %s\n' \
-                "$(format_time "$end")"
-
             if (( now < end )); then
-                printf 'Effet estime restant : %s\n' \
+                printf 'Fin effet BOOST estimee : %s (dans %s)\n' \
+                    "$(format_time_compact "$end")" \
                     "$(format_duration "$((end - now))")"
             else
-                echo 'Effet estime termine'
+                printf 'Fin effet BOOST estimee : %s (effet estime termine)\n' \
+                    "$(format_time_compact "$end")"
             fi
         fi
     fi
 
+    # NUTRI reste visible, meme apres plusieurs jours.
     echo
-    printf 'Intervalle REPAS : %s h\n' "$interval"
 
-    if [[ -z "$last" ]]; then
-        echo 'Prochain REPAS prevu : --'
-        echo 'Prochain REPAS dans : --'
+    if [[ -z "$nutri" ]]; then
+        echo 'Dernier NUTRI : Aucun'
     else
-        next=$((last + interval * 3600))
-        diff=$((next - now))
-
-        printf 'Prochain REPAS prevu : %s\n' \
-            "$(format_time "$next")"
-
-        if (( diff >= 0 )); then
-            printf 'Prochain REPAS dans : %s\n' \
-                "$(format_duration "$diff")"
-        else
-            printf 'Delai depasse de : %s\n' \
-                "$(format_duration "$((-diff))")"
-        fi
+        printf 'Dernier NUTRI : %s (il y a %s)\n' \
+            "$(format_time_compact "$nutri")" \
+            "$(format_duration "$((now - nutri))")"
     fi
 
     echo
@@ -538,7 +621,7 @@ history_view() {
     local start="$1" end="$2" label="$3"
     local from to nextday raw view
     local ts priority kind assoc
-    local meals=0 boosts=0 page total last answer
+    local meals=0 boosts=0 nutris=0 page total last answer
 
     from=$(date -d "$start 00:00:00" +%s) || return 1
     nextday=$(date -d "$end +1 day" +%F) || return 1
@@ -560,6 +643,11 @@ history_view() {
             .boosts[] |
             select(.timestamp >= $a and .timestamp < $b) |
             [.timestamp,2,"BOOST",.with_meal] | @tsv
+        ),
+        (
+            .nutris[] |
+            select(.timestamp >= $a and .timestamp < $b) |
+            [.timestamp,3,"NUTRI",.with_meal] | @tsv
         )
     ' "$JSON" |
     sort -s -t $'\t' -k1,1n -k2,2n > "$raw"; then
@@ -595,15 +683,20 @@ history_view() {
                     printf '%s : BOOST\n' \
                         "$(format_time "$ts")" >> "$view"
                 fi
-
                 ((boosts += 1))
+                ;;
+
+            NUTRI)
+                printf '%s : NUTRI (avec REPAS)\n' \
+                    "$(format_time "$ts")" >> "$view"
+                ((nutris += 1))
                 ;;
         esac
     done < "$raw"
 
     {
         echo '--------------------------------'
-        echo "REPAS : $meals | BOOST : $boosts"
+        echo "REPAS : $meals | BOOST : $boosts | NUTRI : $nutris"
     } >> "$view"
 
     rm -f "$raw"
@@ -642,7 +735,7 @@ history_menu() {
     while true; do
         clear 2>/dev/null || true
 
-        echo 'Historique des REPAS et BOOST'
+        echo 'Historique des REPAS, BOOST et NUTRI'
         echo
         echo '1) 7 derniers jours'
         echo '2) 30 derniers jours'
@@ -656,7 +749,11 @@ history_menu() {
         today=$(date +%F)
 
         first=$(jq -r '
-            ([.meals[].timestamp] + [.boosts[].timestamp]) |
+            (
+                [.meals[].timestamp] +
+                [.boosts[].timestamp] +
+                [.nutris[].timestamp]
+            ) |
             if length == 0 then empty else min end
         ' "$JSON")
 
