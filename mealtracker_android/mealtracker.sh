@@ -551,20 +551,26 @@ show_menu() {
         echo 'Dernier REPAS : Aucun'
         echo 'Prochain REPAS : --'
     else
-        printf 'Dernier REPAS : %s (il y a %s)\n' \
-            "$(format_time_compact "$last")" \
+        printf 'Dernier REPAS : %s\n' \
+            "$(format_time_compact "$last")"
+
+        printf '(il y a %s)\n' \
             "$(format_duration "$((now - last))")"
 
         next=$((last + interval * 3600))
         diff=$((next - now))
 
         if (( diff >= 0 )); then
-            printf 'Prochain REPAS : %s (dans %s)\n' \
-                "$(format_time_compact "$next")" \
+            printf 'Prochain REPAS : %s\n' \
+                "$(format_time_compact "$next")"
+
+            printf '(dans %s)\n' \
                 "$(format_duration "$diff")"
         else
-            printf 'Prochain REPAS : %s (depasse de %s)\n' \
-                "$(format_time_compact "$next")" \
+            printf 'Prochain REPAS : %s\n' \
+                "$(format_time_compact "$next")"
+
+            printf '(depasse de %s)\n' \
                 "$(format_duration "$((-diff))")"
         fi
     fi
@@ -578,19 +584,25 @@ show_menu() {
         if (( elapsed >= 0 && elapsed < display * 3600 )); then
             echo
 
-            printf 'Dernier BOOST : %s (il y a %s)\n' \
-                "$(format_time_compact "$boost")" \
+            printf 'Dernier BOOST : %s\n' \
+                "$(format_time_compact "$boost")"
+
+            printf '(il y a %s)\n' \
                 "$(format_duration "$elapsed")"
 
             end=$((boost + effect * 3600))
 
             if (( now < end )); then
-                printf 'Fin effet BOOST estimee : %s (dans %s)\n' \
-                    "$(format_time_compact "$end")" \
+                printf 'Fin effet BOOST estimee : %s\n' \
+                    "$(format_time_compact "$end")"
+
+                printf '(dans %s)\n' \
                     "$(format_duration "$((end - now))")"
             else
-                printf 'Fin effet BOOST estimee : %s (effet estime termine)\n' \
+                printf 'Fin effet BOOST estimee : %s\n' \
                     "$(format_time_compact "$end")"
+
+                echo '(effet estime termine)'
             fi
         fi
     fi
@@ -601,8 +613,10 @@ show_menu() {
     if [[ -z "$nutri" ]]; then
         echo 'Dernier NUTRI : Aucun'
     else
-        printf 'Dernier NUTRI : %s (il y a %s)\n' \
-            "$(format_time_compact "$nutri")" \
+        printf 'Dernier NUTRI : %s\n' \
+            "$(format_time_compact "$nutri")"
+
+        printf '(il y a %s)\n' \
             "$(format_duration "$((now - nutri))")"
     fi
 
@@ -1004,4 +1018,3 @@ main() {
 }
 
 main "$@"
-
