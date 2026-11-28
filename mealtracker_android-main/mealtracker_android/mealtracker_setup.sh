@@ -4,7 +4,7 @@
 set -u
 
 DATA_DIR="$HOME/storage/shared/mealtracker_data"
-JSON="$DATA_DIR/meals.json"
+JSON="$DATA_DIR/mealtracker.json"
 
 finish() {
     local status="$1"

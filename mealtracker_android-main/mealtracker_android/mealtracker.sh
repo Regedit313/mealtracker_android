@@ -5,7 +5,7 @@ set -o pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATA_DIR="$HOME/storage/shared/mealtracker_data"
-JSON="$DATA_DIR/meals.json"
+JSON="$DATA_DIR/mealtracker.json"
 
 pause_error() {
     printf '\nAppuie sur Entree pour revenir...'
